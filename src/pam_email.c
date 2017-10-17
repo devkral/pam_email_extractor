@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <pwd.h>
 
 
 
@@ -18,29 +19,100 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
 }
 
 void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char *param){
-    ;
+    char *gecos=0, *emailfield=0;
+    size_t email_length=0;
+    struct passwd pws = *getpwnam (username);
+    if (pws){
+        gecos = strdup(pws->pw_gecos);
+        emailfield = gecos;
+        endpwent();
+    }
+    else {
+        return;
+    }
+    for(int c=0; c<3;c++){
+        emailfield=strchr(emailfield, ',')
+        if(!emailfield){
+            free(gecos);
+            return;
+        }
+    }
+    if(strchr(emailfield, '@')){
+        while(isspace(emailfield[0]) && emailfield[0]!='\0')
+            emailfield++;
+        while(!isspace(emailfield[email_length]) && emailfield[0]!='\0')
+            email_length++;
+        ret->email = strndup(emailfield, email_length);
+    }
+    free(gecos);
 }
 
 void extract_git(struct pam_email_ret_t *ret, const char *username, const char *param){
-    char *fname = 0;
-    while ()calloc(strlen(username)+16+1, sizeof(char));
-    
+    char *fname=0, *home_name=0;
+    char *line=0;
+    char* email_begin=0;
+    size_t email_length=0, home_length=0;
+    struct passwd *pws = getpwnam (username);
+    if (pws){
+        home_length = strlen(pws->pw_dir);
+        home_name = strdup(pws->pw_dir);
+        endpwent();
+    }
+    else {
+        return;
+    }
+    // should not fail because of oom, 12 because of / and \0
+    while (!fname){
+        fname = calloc(home_length+12, sizeof(char));
+    }
+    strncpy(fname, home_name, home_length+1);
+    // not needed anymore
+    free(home_name);
+    strncat(fname, "/.gitconfig", 11);
     FILE *f = fopen(fname, "r");
+    // not needed anymore
+    free(fname);
+    if (!f)
+        return;
+    while(!feof(f)){
+        getline(&line, &0, f);
+        if(strstr(line, "email")){
+            email_begin = strchr(line, '=');
+            if (!email_begin)
+                continue;
+            while(isspace(email_begin[0]) && email_begin[0]!='\0')
+                email_begin++;
+            if (email_begin[0]=='\0')
+                continue;
+            while(!isspace(email_begin[email_length]) && email_begin[0]!='\0')
+                email_length++;
+            ret->email = strndup(email_begin, email_length);
+            free(line);
+            break;
+        }
+        free(line);
+        line = NULL;
+    }
+    fclose(f);
 }
 
 
 void extract_default(struct pam_email_ret_t *ret, const char *username, const char *param){
     if (param){
-        ret->email = calloc(strlen(username)+strlen(param)+1, sizeof(char));
-        strncpy(ret->email, username, strlen(username));
+        while (!ret->email){
+            ret->email = (char *)calloc(strlen(username)+strlen(param)+1, sizeof(char));
+        }
+        strncpy(ret->email, username, strlen(username)+1);
         strncat(ret->email, param, strlen(param));
     } else {
         char hostname[256];
         if(!gethostname(hostname, 255))
             return;
         hostname[255] = '\0';
-        ret->email = calloc(strlen(username)+strlen(hostname)+1, sizeof(char));
-        strncpy(ret->email, username, strlen(username));
+        while (!ret->email){
+            ret->email = (char *)calloc(strlen(username)+strlen(hostname)+1, sizeof(char));
+        }
+        strncpy(ret->email, username, strlen(username)+1);
         strncat(ret->email, hostname, strlen(hostname));
     }
 }
@@ -54,15 +126,15 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
     const char *param=0;
     char *extractor=0;
     const char *username;
-    
+
     email_ret.email = 0;
     email_ret.error = 0;
     if (pam_get_item(pamh, PAM_USER, (const void**)&username)!=PAM_SUCCESS){
         email_ret.error = 1;
         goto error;
     }
-    
-    
+
+
     if(argc==1){
         use_all=1;
     }
@@ -89,7 +161,7 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
                 extractor = (char *)argv[countarg];
             }
         }
-        
+
         if ((use_all || strcmp(extractor, "ldap")==0) && (email_ret.email == 0 && email_ret.error == 0)){
             extract_ldap(&email_ret, username, param);
         }
@@ -117,7 +189,7 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
         if (email_ret.error != 0)
             goto error;
     }
-    
+
     return email_ret;
 error:
     if (email_ret.email)
@@ -136,8 +208,11 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags,
     if (ret.email){
         size_t lenemail = strlen(ret.email);
         // +1 char for \0
-        char *emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
-        strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL));
+        char *emailtemp = 0;
+        while (!emailtemp){
+            emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
+        }
+        strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
         strncat(emailtemp, ret.email, lenemail);
         pam_putenv(pamh, emailtemp);
         free(ret.email);
@@ -153,8 +228,11 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags,
     if (ret.email){
         size_t lenemail = strlen(ret.email);
         // +1 char for \0
-        char *emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
-        strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL));
+        char *emailtemp = 0;
+        while (!emailtemp){
+            emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
+        }
+        strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
         strncat(emailtemp, ret.email, lenemail);
         pam_putenv(pamh, emailtemp);
         free(ret.email);
@@ -164,4 +242,3 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags,
     else
         return PAM_IGNORE;
 }
-
