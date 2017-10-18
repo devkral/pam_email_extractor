@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <pwd.h>
 
+#ifndef NO_LDAP
+#include <ldap.h>
+#endif
 
 
 struct pam_email_ret_t {
@@ -13,10 +16,85 @@ struct pam_email_ret_t {
     //char *prefix;
 };
 
-
+#ifndef NO_LDAP
 void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char *param){
-    ;
+    char *parameters[5];
+    char *sep, *next;
+    char *filter=0;
+    BerElement *ber;
+    LDAP *ld_h;
+    LDAPMessage *msg, *entry;
+    next=param;
+    for(int c=0; c<5; c++){
+        if (next)
+            sep=strchr(next, ';');
+        if (sep==0){
+            switch (c){
+                case 0:
+                    parameters[c] = strdup(param);
+                    break;
+                case 1:
+                    parameters[c] = strdup("ou=users,dc=uaux,dc=de");
+                    break;
+                case 2:
+                    parameters[c] = 0;
+                    break;
+                case 3:
+                    parameters[c] = 0;
+                    break;
+            }
+        } else {
+            if (sep-next==0)
+                parameters[c] = 0;
+            else
+                parameters[c] = strndup(next, sep-next);
+            next=sep+1;
+        }
+    }
+    while (!filter){
+        // "(uid=)"
+        filter = (char*)calloc(strlen(username)+6, sizeof(char));
+    }
+    strncpy(filter, "(uid=", 6);
+    strncat(filter, username, strlen(username));
+    strncat(filter, ")", 1);
+    if (!(ld_h = ldap_init(parameter[0], LDAPS_PORT)))
+        goto cleanup_ldap;
+    if (ldap_set_option(ld_h, LDAP_OPT_PROTOCOL_VERSION, &LDAP_VERSION3) != LDAP_OPT_SUCCESS)
+        goto cleanup_ldap;
+    if (ldap_bind_s(ld_h, parameter[4], parameter[5], LDAP_AUTH_SIMPLE) != LDAP_SUCCESS ) {
+        goto ldap_fallback;
+    }
+    goto ldap_ready;
+ldap_fallback:
+    ldap_destroy(ld);
+    if (!(ld_h = ldap_init(parameter[0], LDAP_PORT)))
+        goto cleanup_ldap;
+    if (ldap_set_option(ld_h, LDAP_OPT_PROTOCOL_VERSION, &LDAP_VERSION3) != LDAP_OPT_SUCCESS)
+        goto cleanup_ldap;
+    if (ldap_bind_s(ld_h, parameter[4], parameter[5], LDAP_AUTH_SIMPLE) != LDAP_SUCCESS ) {
+        goto cleanup_ldap_skip_unbind;
+    }
+ldap_ready:
+
+    if (ldap_search_ext_s(ld_h, base, LDAP_SCOPE_ONELEVEL, filter, {"mail", 0}, 0, NULL, NULL, NULL, 1, &msg)!= LDAP_SUCCESS) {
+        goto cleanup_ldap;
+    }
+    entry = ldap_first_entry(ld, msg);
+    ret->email=strdup(ldap_first_attribute(ld, msg, &ber));
+    ldap_msgfree(msg);
+
+cleanup_ldap:
+    ldap_unbind_s(ld);
+cleanup_ldap_skip_unbind:
+    ldap_destroy(ld);
+    free(filter);
+    for (int c=0; c<5;c++){
+        if (parameters[c])
+            free(c);
+    }
 }
+#endif
 
 void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char *param){
     char *gecos=0, *emailfield=0;
@@ -131,7 +209,7 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
     email_ret.error = 0;
     if (pam_get_item(pamh, PAM_USER, (const void**)&username)!=PAM_SUCCESS){
         email_ret.error = 1;
-        goto error;
+        goto error_extract_email;
     }
 
 
@@ -144,7 +222,7 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
             if (param){
                 if (param-argv[countarg] == 0){
                     email_ret.error = 1;
-                    goto error;
+                    goto error_extract_email;
                 }
                 // handle out of memory gracefully, elsewise login or whatever fails
                 while(extractor==0){
@@ -162,9 +240,19 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
             }
         }
 
-        if ((use_all || strcmp(extractor, "ldap")==0) && (email_ret.email == 0 && email_ret.error == 0)){
-            extract_ldap(&email_ret, username, param);
+#ifndef NO_LDAP
+        if ((strcmp(extractor, "ldap")==0) && (email_ret.email == 0 && email_ret.error == 0)){
+            if (param)
+                extract_ldap(&email_ret, username, param);
+            else {
+                fprintf(stderr, "LDAP needs configuration");
+            }
         }
+#else
+        if (strcmp(extractor, "ldap")==0){
+            fprintf(stderr, "LDAP is not available");
+        }
+#endif
         if ((use_all || strcmp(extractor, "gecos")==0) && (email_ret.email == 0 && email_ret.error == 0)){
             extract_gecos(&email_ret, username, param);
         }
@@ -187,11 +275,11 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
         extractor = 0;
         use_all = 0;
         if (email_ret.error != 0)
-            goto error;
+            goto error_extract_email;
     }
 
     return email_ret;
-error:
+error_extract_email:
     if (email_ret.email)
         free(email_ret.email);
     if (param){
