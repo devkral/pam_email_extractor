@@ -1,5 +1,6 @@
 #include "pam_email.h"
 #include <string.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -7,11 +8,12 @@
 
 #ifndef NO_LDAP
 #include <ldap.h>
+const char* ldap_attrs[] = {"email", 0};
 #endif
 
 // +1 for adjustment
 const int default_argc = 4;
-const char*[] default_argv = {"gecos=", "git=", "default="};
+const char* default_argv[] = {"gecos=", "git=", "default="};
 
 struct pam_email_ret_t {
     int error;
@@ -20,13 +22,13 @@ struct pam_email_ret_t {
 };
 
 #ifndef NO_LDAP
-// host, port, base, (filter, (user, (pw)))
+// uri, base, (filter, (user, (pw)))
 void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char *param){
-    char *parameters[6];
-    char *sep, *next;
+    char *parameters[5];
+    const char *sep, *next;
     char *filter=0, *tmp_filter, *tmp_filter2;
     size_t count_replacements=0;
-    unsigned int port=0;
+    unsigned int ldap_version = LDAP_VERSION3;
     BerElement *ber;
     LDAP *ld_h;
     LDAPMessage *msg, *entry;
@@ -40,35 +42,36 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
                     ret->error = 1;
                     goto cleanup_ldap_skip_unbind;
                     break;
+                case 1:
+                    parameters[1] = strdup(param);
+                    parameters[2] = "(uid=?)";
+                    parameters[3] = 0;
+                    parameters[4] = 0;
+                    break;
                 case 2:
                     parameters[2] = strdup(param);
-                    parameters[3] = "(uid=?)";
+                    parameters[3] = 0;
                     parameters[4] = 0;
-                    parameters[5] = 0;
                     break;
                 case 3:
                     parameters[3] = strdup(param);
                     parameters[4] = 0;
-                    parameters[5] = 0;
                     break;
                 case 4:
                     parameters[4] = strdup(param);
-                    parameters[5] = 0;
-                    break;
-                case 5:
-                    parameters[5] = strdup(param);
                     break;
             }
             break;
         } else {
-            if (sep-next==0)
+            if (sep-next==0){
                 parameters[c] = 0;
-            else
+            }
+            else{
                 parameters[c] = strndup(next, sep-next);
+            }
             next=sep+1;
         }
     }
-    port = atoi(parameters[1]);
     tmp_filter = strchr(parameters[3], '?');
     while(*tmp_filter)
     {
@@ -92,49 +95,45 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
         tmp_filter2 = strchr(tmp_filter+1, '?');
     }
     strncat(filter, tmp_filter, strlen(tmp_filter));
-    if (!(ld_h = ldap_init(parameter[0], port ? port : LDAPS_PORT))){
+    if (!ldap_initialize(&ld_h, parameters[0])){
         ret->error = 1;
         goto cleanup_ldap;
     }
-    if (ldap_set_option(ld_h, LDAP_OPT_PROTOCOL_VERSION, &LDAP_VERSION3) != LDAP_OPT_SUCCESS){
+    if (ldap_set_option(ld_h, LDAP_OPT_PROTOCOL_VERSION, &ldap_version) != LDAP_OPT_SUCCESS){
         ret->error = 1;
         goto cleanup_ldap;
     }
-    if (ldap_bind_s(ld_h, parameter[4], parameter[5], LDAP_AUTH_SIMPLE) != LDAP_SUCCESS ) {
-        if(port!=0){
-            ret->error = 1;
-            goto cleanup_ldap;
-        }
-        else
-            goto ldap_fallback;
+    /**
+    if(parameter[4]){
+        // TODO: prefi with u: ?
     }
-    goto ldap_ready;
-ldap_fallback:
-    ldap_destroy(ld);
-    if (!(ld_h = ldap_init(parameter[0], LDAP_PORT)))
-        goto cleanup_ldap;
-    if (ldap_set_option(ld_h, LDAP_OPT_PROTOCOL_VERSION, &LDAP_VERSION3) != LDAP_OPT_SUCCESS)
-        goto cleanup_ldap;
-    if (ldap_bind_s(ld_h, parameter[4], parameter[5], LDAP_AUTH_SIMPLE) != LDAP_SUCCESS ) {
-        goto cleanup_ldap_skip_unbind;
-    }
-ldap_ready:
+    if(parameter[5]){
 
-    if (ldap_search_ext_s(ld_h, parameter[2], LDAP_SCOPE_ONELEVEL, filter, {"mail", 0}, 0, NULL, NULL, NULL, 1, &msg)!= LDAP_SUCCESS) {
+    }
+    if (ldap_sasl_bind_s(ld_h, parameter[4], "", parameter[5], NULL, NULL) != LDAP_SUCCESS ) {
+        ret->error = 1;
+        goto cleanup_ldap;
+    }*/
+    if (ldap_sasl_bind_s(ld_h, NULL, "", NULL, NULL, NULL, NULL) != LDAP_SUCCESS ) {
+        ret->error = 1;
         goto cleanup_ldap;
     }
-    entry = ldap_first_entry(ld, msg);
-    ret->email=strdup(ldap_first_attribute(ld, msg, &ber));
+
+    if (ldap_search_ext_s(ld_h, parameters[1], LDAP_SCOPE_ONELEVEL, filter, (char**)ldap_attrs, 0, NULL, NULL, NULL, 1, &msg)!= LDAP_SUCCESS) {
+        goto cleanup_ldap;
+    }
+    entry = ldap_first_entry(ld_h, msg);
+    ret->email=strdup(ldap_first_attribute(ld_h, msg, &ber));
     ldap_msgfree(msg);
 
 cleanup_ldap:
-    ldap_unbind_s(ld);
+    ldap_unbind_ext_s(ld_h, NULL, NULL);
 cleanup_ldap_skip_unbind:
-    ldap_destroy(ld);
+    ldap_destroy(ld_h);
     free(filter);
     for (int c=0; c<5;c++){
         if (parameters[c])
-            free(c);
+            free(parameters[c]);
     }
 }
 #endif
@@ -142,17 +141,18 @@ cleanup_ldap_skip_unbind:
 void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char *param){
     char *gecos=0, *emailfield=0;
     size_t email_length=0;
-    struct passwd pws = *getpwnam (username);
+    struct passwd *pws = getpwnam (username);
     if (pws){
         gecos = strdup(pws->pw_gecos);
         emailfield = gecos;
         endpwent();
+        free(pws);
     }
     else {
         return;
     }
     for(int c=0; c<3;c++){
-        emailfield=strchr(emailfield, ',')
+        emailfield=strchr(emailfield, ',');
         if(!emailfield){
             free(gecos);
             return;
@@ -170,7 +170,8 @@ void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char
 
 void extract_git(struct pam_email_ret_t *ret, const char *username, const char *param){
     char *fname=0, *home_name=0;
-    char *line=0;
+    char *line=NULL;
+    size_t line_length=0;
     char* email_begin=0;
     size_t email_length=0, home_length=0;
     struct passwd *pws = getpwnam (username);
@@ -196,7 +197,7 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
     if (!f)
         return;
     while(!feof(f)){
-        getline(&line, &0, f);
+        getline(&line, &line_length, f);
         if(strstr(line, "email")){
             email_begin = strchr(line, '=');
             if (!email_begin)
