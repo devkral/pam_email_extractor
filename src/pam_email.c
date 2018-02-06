@@ -1,7 +1,6 @@
 #include "pam_email.h"
 #include <string.h>
 #include <ctype.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <pwd.h>
@@ -16,7 +15,7 @@ const int default_argc = 4;
 const char* default_argv[] = {"gecos=", "git=", "default="};
 
 struct pam_email_ret_t {
-    int error;
+    int state;
     char *email;
     //char *prefix;
 };
@@ -24,9 +23,9 @@ struct pam_email_ret_t {
 #ifndef NO_LDAP
 // uri, base, (filter, (user, (pw)))
 void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char *param){
-    char *parameters[5];
+    char *parameters[5]={0,0,0,0,0};
     const char *sep, *next;
-    char *filter=0, *tmp_filter, *tmp_filter2;
+    char *filter=0, *tmp_filter, *tmp_filter2, *first_attribute;
     size_t count_replacements=0;
     unsigned int ldap_version = LDAP_VERSION3;
     BerElement *ber;
@@ -39,26 +38,30 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
         if (sep==0){
             switch (c){
                 default:
-                    ret->error = 1;
+                    ret->state = PAM_AUTH_ERR;
                     goto cleanup_ldap_skip_unbind;
                     break;
                 case 1:
-                    parameters[1] = strdup(param);
+                    while(!parameters[1])
+                        parameters[1] = strdup(param);
                     parameters[2] = "(uid=?)";
                     parameters[3] = 0;
                     parameters[4] = 0;
                     break;
                 case 2:
-                    parameters[2] = strdup(param);
+                    while(!parameters[2])
+                        parameters[2] = strdup(param);
                     parameters[3] = 0;
                     parameters[4] = 0;
                     break;
                 case 3:
-                    parameters[3] = strdup(param);
+                    while(!parameters[3])
+                        parameters[3] = strdup(param);
                     parameters[4] = 0;
                     break;
                 case 4:
-                    parameters[4] = strdup(param);
+                    while(!parameters[4])
+                        parameters[4] = strdup(param);
                     break;
             }
             break;
@@ -67,7 +70,8 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
                 parameters[c] = 0;
             }
             else{
-                parameters[c] = strndup(next, sep-next);
+                while(!parameters[c])
+                    parameters[c] = strndup(next, sep-next);
             }
             next=sep+1;
         }
@@ -84,7 +88,7 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
     tmp_filter = parameters[3];
     tmp_filter2 = strchr(parameters[3], '?');
     if(tmp_filter2==0){
-        ret->error = 1;
+        ret->state = PAM_AUTH_ERR;
         goto cleanup_ldap_skip_unbind;
     }
     while(*tmp_filter2)
@@ -96,11 +100,11 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
     }
     strncat(filter, tmp_filter, strlen(tmp_filter));
     if (!ldap_initialize(&ld_h, parameters[0])){
-        ret->error = 1;
+        ret->state = PAM_AUTH_ERR;
         goto cleanup_ldap;
     }
     if (ldap_set_option(ld_h, LDAP_OPT_PROTOCOL_VERSION, &ldap_version) != LDAP_OPT_SUCCESS){
-        ret->error = 1;
+        ret->state = PAM_AUTH_ERR;
         goto cleanup_ldap;
     }
     /**
@@ -111,11 +115,11 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
 
     }
     if (ldap_sasl_bind_s(ld_h, parameter[4], "", parameter[5], NULL, NULL) != LDAP_SUCCESS ) {
-        ret->error = 1;
+        ret->error = PAM_AUTH_ERR;
         goto cleanup_ldap;
     }*/
     if (ldap_sasl_bind_s(ld_h, NULL, "", NULL, NULL, NULL, NULL) != LDAP_SUCCESS ) {
-        ret->error = 1;
+        ret->state = PAM_AUTH_ERR;
         goto cleanup_ldap;
     }
 
@@ -123,7 +127,9 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
         goto cleanup_ldap;
     }
     entry = ldap_first_entry(ld_h, msg);
-    ret->email=strdup(ldap_first_attribute(ld_h, msg, &ber));
+    first_attribute = ldap_first_attribute(ld_h, msg, &ber);
+    while (!ret->email)
+        ret->email=strdup(first_attribute);
     ldap_msgfree(msg);
 
 cleanup_ldap:
@@ -143,7 +149,8 @@ void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char
     size_t email_length=0;
     struct passwd *pws = getpwnam (username);
     if (pws){
-        gecos = strdup(pws->pw_gecos);
+        while(!gecos)
+            gecos = strdup(pws->pw_gecos);
         emailfield = gecos;
         endpwent();
         free(pws);
@@ -177,7 +184,8 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
     struct passwd *pws = getpwnam (username);
     if (pws){
         home_length = strlen(pws->pw_dir);
-        home_name = strdup(pws->pw_dir);
+        while(!home_name)
+            home_name = strdup(pws->pw_dir);
         endpwent();
     }
     else {
@@ -221,6 +229,7 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
 
 void extract_default(struct pam_email_ret_t *ret, const char *username, const char *param){
     if (param){
+        // handle out of memory gracefully, elsewise login or whatever fails
         while (!ret->email){
             ret->email = (char *)calloc(strlen(username)+strlen(param)+1, sizeof(char));
         }
@@ -231,6 +240,7 @@ void extract_default(struct pam_email_ret_t *ret, const char *username, const ch
         if(!gethostname(hostname, 255))
             return;
         hostname[255] = '\0';
+        // handle out of memory gracefully, elsewise login or whatever fails
         while (!ret->email){
             ret->email = (char *)calloc(strlen(username)+strlen(hostname)+1, sizeof(char));
         }
@@ -250,9 +260,9 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
     const char *username;
 
     email_ret.email = 0;
-    email_ret.error = 0;
+    email_ret.state = PAM_SUCCESS;
     if (pam_get_item(pamh, PAM_USER, (const void**)&username)!=PAM_SUCCESS){
-        email_ret.error = 1;
+        email_ret.state = PAM_AUTH_ERR;
         goto error_extract_email;
     }
 
@@ -266,13 +276,17 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
             param = strchr(argv[countarg], '=');
             if (param){
                 if (param-argv[countarg] == 0){
-                    email_ret.error = 1;
+                    email_ret.state = PAM_AUTH_ERR;
                     goto error_extract_email;
                 }
                 // handle out of memory gracefully, elsewise login or whatever fails
-                while(extractor==0){
+                for (size_t errcount=0; !extractor; errcount++){
                     // length +1 for \0
                     extractor = (char*)calloc(param-argv[countarg]+1, sizeof(char));
+                    if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
+                        email_ret.state=PAM_BUF_ERR;
+                        goto error_extract_email;
+                    }
                 }
                 // copy without =, \0 is set by calloc
                 strncpy(extractor, argv[countarg], param-argv[countarg]);
@@ -287,7 +301,7 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
 
 #ifndef NO_LDAP
         // without config not usable => no use_all auto activation
-        if (strcmp(extractor, "ldap")==0 && (email_ret.email == 0 && email_ret.error == 0)){
+        if (strcmp(extractor, "ldap")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
             if (param)
                 extract_ldap(&email_ret, username, param);
             else {
@@ -299,16 +313,16 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
             fprintf(stderr, "LDAP is not available");
         }
 #endif
-        if (strcmp(extractor, "gecos")==0 && (email_ret.email == 0 && email_ret.error == 0)){
+        if (strcmp(extractor, "gecos")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
             extract_gecos(&email_ret, username, param);
         }
-        if (strcmp(extractor, "git")==0 && (email_ret.email == 0 && email_ret.error == 0)){
+        if (strcmp(extractor, "git")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
             extract_git(&email_ret, username, param);
         }
 
 
         // last extractor, failback
-        if (strcmp(extractor, "default")==0 && (email_ret.email == 0 && email_ret.error == 0)){
+        if (strcmp(extractor, "default")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
             extract_default(&email_ret, username, param);
         }
 
@@ -320,7 +334,7 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
         param = 0;
         extractor = 0;
         use_all = 0;
-        if (email_ret.error != 0)
+        if (email_ret.state != PAM_SUCCESS)
             goto error_extract_email;
     }
 
@@ -337,42 +351,48 @@ error_extract_email:
 
 
 int pam_sm_authenticate(pam_handle_t *pamh, int flags,
-                               int argc, const char **argv){
+                        int argc, const char **argv){
     struct pam_email_ret_t ret = extract_email(pamh, argc, argv);
     if (ret.email){
         size_t lenemail = strlen(ret.email);
         // +1 char for \0
         char *emailtemp = 0;
-        while (!emailtemp){
+        // handle out of memory errors.Try multiple times until giving up
+        for (size_t errcount=0; !emailtemp; errcount++){
             emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
+            if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX)
+                return PAM_BUF_ERR;
         }
         strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
         strncat(emailtemp, ret.email, lenemail);
         pam_putenv(pamh, emailtemp);
         free(ret.email);
     }
-    if (ret.error)
-        return PAM_CONV_ERR;
+    if (ret.state!=PAM_SUCCESS)
+        return ret.state;
     else
         return PAM_IGNORE;
 }
 int pam_sm_open_session(pam_handle_t *pamh, int flags,
-                               int argc, const char **argv){
+                        int argc, const char **argv){
     struct pam_email_ret_t ret = extract_email(pamh, argc, argv);
     if (ret.email){
         size_t lenemail = strlen(ret.email);
         // +1 char for \0
         char *emailtemp = 0;
-        while (!emailtemp){
+        // handle out of memory errors.Try multiple times until giving up
+        for (size_t errcount=0; !emailtemp; errcount++){
             emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
+            if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX)
+                return PAM_BUF_ERR;
         }
         strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
         strncat(emailtemp, ret.email, lenemail);
         pam_putenv(pamh, emailtemp);
         free(ret.email);
     }
-    if (ret.error)
-        return  PAM_CONV_ERR;
+    if (ret.state!=PAM_SUCCESS)
+        return ret.state;
     else
         return PAM_IGNORE;
 }
