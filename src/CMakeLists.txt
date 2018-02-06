@@ -1,8 +1,6 @@
 
-# does not work, but not required?
 find_library (PAM_LIB NAMES libpam.so)
 find_library (LDAP_LIB NAMES libldap.so)
-# ${LIB_PAM_LIBRARY} ${LIB_LDAP_LIBRARY}
 
 add_library (pam_email SHARED pam_email.c)
 target_include_directories (pam_email PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
