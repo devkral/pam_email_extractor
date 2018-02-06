@@ -252,13 +252,12 @@ void extract_default(struct pam_email_ret_t *ret, const char *username, const ch
 
 
 
-struct pam_email_ret_t extract_email(pam_handle_t *pamh, const int _argc, const char **_argv){
+struct pam_email_ret_t extract_email(pam_handle_t *pamh, const int _argc, const char **argv){
     char use_all = 0;
     struct pam_email_ret_t email_ret;
     const char *param=0;
     char *extractor=0;
     const char *username;
-    char **argv;
     int argc;
 
     email_ret.email = 0;
@@ -273,7 +272,6 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, const int _argc, const 
         argv = default_argv;
         argc = default_argc;
     } else {
-        argv = _argv;
         argc = _argc;
     }
     for (int countarg=1; countarg < argc; countarg++){
