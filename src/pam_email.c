@@ -66,10 +66,7 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
             }
             break;
         } else {
-            if (sep-next==0){
-                parameters[c] = 0;
-            }
-            else{
+            if (sep-next>0){
                 while(!parameters[c])
                     parameters[c] = strndup(next, sep-next);
             }
@@ -109,7 +106,7 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
     }
     /**
     if(parameter[4]){
-        // TODO: prefi with u: ?
+        // TODO: prefix with u: ?
     }
     if(parameter[5]){
 
@@ -158,13 +155,15 @@ void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char
     else {
         return;
     }
-    for(int c=0; c<3;c++){
+    // find email field
+    for(int c=0; c<3; c++){
         emailfield=strchr(emailfield, ',');
         if(!emailfield){
             free(gecos);
             return;
         }
     }
+    // check if it is an email
     if(strchr(emailfield, '@')){
         while(isspace(emailfield[0]) && emailfield[0]!='\0')
             emailfield++;
