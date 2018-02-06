@@ -1,10 +1,10 @@
 
 # does not work, but not required?
-#find_library (LIB_PAM_LIBRARY NAMES libpam)
-#find_library (LIB_LDAP_LIBRARY NAMES libldap)
+find_library (PAM_LIB NAMES libpam.so)
+find_library (LDAP_LIB NAMES libldap.so)
 # ${LIB_PAM_LIBRARY} ${LIB_LDAP_LIBRARY}
 
 add_library (pam_email SHARED pam_email.c)
 target_include_directories (pam_email PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(pam_email)
+target_link_libraries(pam_email "${PAM_LIB}" "${LDAP_LIB}")
 SET_TARGET_PROPERTIES(pam_email PROPERTIES PREFIX "")
