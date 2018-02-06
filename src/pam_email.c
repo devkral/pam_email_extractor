@@ -13,7 +13,7 @@ const char* ldap_attrs[] = {"email", 0};
 
 // +1 for adjustment
 const int default_argc = 4;
-const char* default_argv[] = {"gecos=", "git=", "default="};
+const char* default_argv[] = {"", "gecos=", "git=", "default="};
 
 struct pam_email_ret_t {
     int state;
@@ -252,12 +252,14 @@ void extract_default(struct pam_email_ret_t *ret, const char *username, const ch
 
 
 
-struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **argv){
+struct pam_email_ret_t extract_email(pam_handle_t *pamh, const int _argc, const char **_argv){
     char use_all = 0;
     struct pam_email_ret_t email_ret;
     const char *param=0;
     char *extractor=0;
     const char *username;
+    char **argv;
+    int argc;
 
     email_ret.email = 0;
     email_ret.state = PAM_SUCCESS;
@@ -267,38 +269,39 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
     }
 
 
-    if(argc==1){
+    if(_argc==1){
         argv = default_argv;
         argc = default_argc;
+    } else {
+        argv = _argv;
+        argc = _argc;
     }
     for (int countarg=1; countarg < argc; countarg++){
-        if (argc>1){
-            param = strchr(argv[countarg], '=');
-            if (param){
-                if (param-argv[countarg] == 0){
-                    email_ret.state = PAM_AUTH_ERR;
+        param = strchr(argv[countarg], '=');
+        if (param){
+            if (param-argv[countarg] == 0){
+                email_ret.state = PAM_AUTH_ERR;
+                goto error_extract_email;
+            }
+            // handle out of memory gracefully, elsewise login or whatever fails
+            for (size_t errcount=0; !extractor; errcount++){
+                // length +1 for \0
+                extractor = (char*)calloc(param-argv[countarg]+1, sizeof(char));
+#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
+                if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
+                    email_ret.state=PAM_BUF_ERR;
                     goto error_extract_email;
                 }
-                // handle out of memory gracefully, elsewise login or whatever fails
-                for (size_t errcount=0; !extractor; errcount++){
-                    // length +1 for \0
-                    extractor = (char*)calloc(param-argv[countarg]+1, sizeof(char));
-#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
-                    if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
-                        email_ret.state=PAM_BUF_ERR;
-                        goto error_extract_email;
-                    }
 #endif
-                }
-                // copy without =, \0 is set by calloc
-                strncpy(extractor, argv[countarg], param-argv[countarg]);
-                // remove =
-                param = param+1;
-                // if strlea
-            } else {
-                // extractor is not freed in this case, so remove const
-                extractor = (char *)argv[countarg];
             }
+            // copy without =, \0 is set by calloc
+            strncpy(extractor, argv[countarg], param-argv[countarg]);
+            // remove =
+            param = param+1;
+            // if strlea
+        } else {
+            // extractor is not freed in this case, so remove const
+            extractor = (char *)argv[countarg];
         }
 
 #ifndef NO_LDAP
