@@ -377,6 +377,12 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags,
     else
         return PAM_IGNORE;
 }
+
+int pam_sm_setcred(pam_handle_t *pamh, int flags,
+                   int argc, const char **argv){
+    return PAM_SUCCESS;
+}
+
 int pam_sm_open_session(pam_handle_t *pamh, int flags,
                         int argc, const char **argv){
     struct pam_email_ret_t ret = extract_email(pamh, argc, argv);
@@ -398,7 +404,11 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags,
         free(ret.email);
     }
     if (ret.state!=PAM_SUCCESS)
-        return ret.state;
+        return PAM_SESSION_ERR;
     else
         return PAM_IGNORE;
+}
+int pam_sm_close_session(pam_handle_t *pamh, int flags,
+                         int argc, const char **argv){
+    return PAM_SUCCESS;
 }
