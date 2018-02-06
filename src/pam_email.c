@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <pwd.h>
 
 #ifndef NO_LDAP
@@ -282,10 +283,12 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
                 for (size_t errcount=0; !extractor; errcount++){
                     // length +1 for \0
                     extractor = (char*)calloc(param-argv[countarg]+1, sizeof(char));
+#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
                     if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
                         email_ret.state=PAM_BUF_ERR;
                         goto error_extract_email;
                     }
+#endif
                 }
                 // copy without =, \0 is set by calloc
                 strncpy(extractor, argv[countarg], param-argv[countarg]);
@@ -359,8 +362,10 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags,
         // handle out of memory errors.Try multiple times until giving up
         for (size_t errcount=0; !emailtemp; errcount++){
             emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
+#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
             if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX)
                 return PAM_BUF_ERR;
+#endif
         }
         strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
         strncat(emailtemp, ret.email, lenemail);
@@ -382,8 +387,10 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags,
         // handle out of memory errors.Try multiple times until giving up
         for (size_t errcount=0; !emailtemp; errcount++){
             emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
+#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
             if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX)
                 return PAM_BUF_ERR;
+#endif
         }
         strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
         strncat(emailtemp, ret.email, lenemail);
