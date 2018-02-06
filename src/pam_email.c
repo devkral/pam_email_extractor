@@ -364,7 +364,7 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags,
             emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
 #ifdef PAM_EMAIL_ALLOC_ERROR_MAX
             if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX)
-                return PAM_BUF_ERR;
+                return PAM_IGNORE;
 #endif
         }
         strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
@@ -372,15 +372,15 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags,
         pam_putenv(pamh, emailtemp);
         free(ret.email);
     }
-    if (ret.state!=PAM_SUCCESS)
-        return ret.state;
+    if (ret.state!=PAM_SUCCESS && ret.state!=PAM_BUF_ERR)
+        return PAM_AUTH_ERR;
     else
         return PAM_IGNORE;
 }
 
 int pam_sm_setcred(pam_handle_t *pamh, int flags,
                    int argc, const char **argv){
-    return PAM_SUCCESS;
+    return PAM_IGNORE;
 }
 
 int pam_sm_open_session(pam_handle_t *pamh, int flags,
@@ -395,7 +395,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags,
             emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
 #ifdef PAM_EMAIL_ALLOC_ERROR_MAX
             if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX)
-                return PAM_BUF_ERR;
+                return PAM_IGNORE;
 #endif
         }
         strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
@@ -403,12 +403,12 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags,
         pam_putenv(pamh, emailtemp);
         free(ret.email);
     }
-    if (ret.state!=PAM_SUCCESS)
+    if (ret.state!=PAM_SUCCESS && ret.state!=PAM_BUF_ERR)
         return PAM_SESSION_ERR;
     else
         return PAM_IGNORE;
 }
 int pam_sm_close_session(pam_handle_t *pamh, int flags,
                          int argc, const char **argv){
-    return PAM_SUCCESS;
+    return PAM_IGNORE;
 }
