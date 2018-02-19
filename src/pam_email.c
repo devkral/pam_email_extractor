@@ -9,19 +9,7 @@
 #ifndef NO_LDAP
 #include <ldap.h>
 const char* ldap_attrs[] = {"email", 0};
-#endif
 
-// +1 for adjustment
-const int default_argc = 3;
-const char* default_argv[] = {"gecos=", "git=", "default=localhost"};
-
-struct pam_email_ret_t {
-    int state;
-    char *email;
-    //char *prefix;
-};
-
-#ifndef NO_LDAP
 // uri, base, (filter, (user, (pw)))
 void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char *param){
     char *parameters[5]={0,0,0,0,0};

@@ -6,3 +6,10 @@ add_library (pam_email SHARED pam_email.c)
 target_include_directories (pam_email PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(pam_email "${PAM_LIB}" "${LDAP_LIB}")
 SET_TARGET_PROPERTIES(pam_email PROPERTIES PREFIX "")
+
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  message("build debug executatable")
+  add_executable(pam_email_test pam_email_test.c)
+  target_link_libraries(pam_email_test pam_email)
+endif()
