@@ -187,22 +187,22 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
     // not needed anymore
     free(home_name);
     strncat(fname, "/.gitconfig", 11);
-    FILE *f = fopen(fname, "r");
+    FILE *gitfile = fopen(fname, "r");
     // not needed anymore
     free(fname);
-    if (!f)
+    if (!gitfile)
         return;
-    while(!feof(f)){
-        getline(&line, &line_length, f);
+    while(!feof(gitfile)){
+        getline(&line, &line_length, gitfile);
         if(strstr(line, "email")){
-            email_begin = strchr(line, '=');
+            email_begin = strchr(line, '=')+1;
             if (!email_begin)
                 continue;
             while(isspace(email_begin[0]) && email_begin[0]!='\0')
                 email_begin++;
             if (email_begin[0]=='\0')
                 continue;
-            while(!isspace(email_begin[email_length]) && email_begin[0]!='\0')
+            while(!isspace(email_begin[email_length]) && email_begin[email_length]!='\0')
                 email_length++;
             ret->email = strndup(email_begin, email_length);
             free(line);
@@ -211,7 +211,7 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
         free(line);
         line = NULL;
     }
-    fclose(f);
+    fclose(gitfile);
 }
 
 
