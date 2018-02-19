@@ -4,56 +4,52 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <pwd.h>
 
 #ifndef NO_LDAP
 #include <ldap.h>
-const char* ldap_attrs[] = {"email", 0};
 
-// uri, base, (filter, (user, (pw)))
+// uri, base, (ldap attr, (filter, (sasl auth method)))
 void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char *param){
     char* parameters[5]={0,0,0,0,0};
+    const int amount_parameters=5;
+    unsigned char needs_unbind=0;
     const char *sep, *last;
-    char *filter=0, *tmp_filter, *tmp_filter_next, *first_attribute;
+    int err;
+    char *filter=0, *tmp_filter, *tmp_filter_next, *email_attribute;
+    char *ldap_attr[2]={0,0};
     size_t count_replacements=0;
     const size_t len_username = strlen(username);
     unsigned int ldap_version = LDAP_VERSION3;
-    BerElement *ber=0;
+    BerValue ** email_values;
     LDAP *ld_h=0;
     LDAPMessage *msg=0, *entry=0;
     last=param;
-    for(int c=0; c<5; c++){
+    for(int c=0; c<amount_parameters; c++){
         if (last)
             sep=strchr(last, ';');
         if (sep==0){
             switch (c){
                 default:
                     ret->state = PAM_AUTH_ERR;
-                    goto cleanup_ldap_skip_unbind;
+                    goto cleanup_ldap;
                     break;
                 case 1:
                     while(!parameters[1])
                         parameters[1] = strdup(last);
                     while(!parameters[2])
-                        parameters[2] = strdup("(uid=?)");
-                    assert(parameters[3]==0);
-                    assert(parameters[4]==0);
+                        parameters[2] = strdup("email");
+                    while(!parameters[3])
+                        parameters[3] = strdup("(uid=?)");
                     break;
                 case 2:
-                    while(!parameters[2])
-                        parameters[2] = strdup(last);
-                    break;
-                    assert(parameters[3]==0);
-                    assert(parameters[4]==0);
-                case 3:
                     while(!parameters[3])
-                        parameters[3] = strdup(last);
+                        parameters[3] = strdup("(uid=?)");
                     break;
-                    assert(parameters[4]==0);
+                case 3:
                 case 4:
-                    while(!parameters[4])
-                        parameters[4] = strdup(last);
+                    while(!parameters[c])
+                        parameters[c] = strdup(last);
                     break;
             }
             break;
@@ -65,7 +61,10 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
             last=sep+1;
         }
     }
-    tmp_filter = strchr(parameters[2], '?');
+    // only extract email
+    ldap_attr[0] = parameters[2];
+    // create filter
+    tmp_filter = strchr(parameters[3], '?');
     // count replacements
     while(tmp_filter)
     {
@@ -74,14 +73,10 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
     }
     // create filter, shall never oom
     while (!filter){
-        filter = (char*)calloc(len_username*count_replacements+strlen(parameters[2])+1, sizeof(char));
+        filter = (char*)calloc(len_username*count_replacements+strlen(parameters[3])+1, sizeof(char));
     }
-    tmp_filter = parameters[2];
+    tmp_filter = parameters[3];
     tmp_filter_next = strchr(tmp_filter, '?');
-    if(!tmp_filter_next){
-        ret->state = PAM_AUTH_ERR;
-        goto cleanup_ldap_skip_unbind;
-    }
     while(tmp_filter_next)
     {
         strncat(filter, tmp_filter, tmp_filter_next-tmp_filter);
@@ -93,54 +88,56 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
 #ifdef PAM_EMAIL_DEBUG_LDAP
     printf("Filter: \"%s\"\n", filter);
 #endif
-    if (ldap_initialize(&ld_h, parameters[0]) != LDAP_SUCCESS){
-        ret->state = PAM_AUTH_ERR;
-        goto cleanup_ldap_skip_unbind;
-    }
-
-    if (ldap_set_option(ld_h, LDAP_OPT_PROTOCOL_VERSION, &ldap_version) != LDAP_OPT_SUCCESS){
-        ret->state = PAM_AUTH_ERR;
-        goto cleanup_ldap_skip_unbind;
-    }
-    printf("success init\n");
-    /**
-    if(parameter[3]){
-        // TODO: prefix with u: ?
-    }
-    if(parameter[4]){
-
-    }
-    if (ldap_sasl_bind_s(ld_h, parameter[3], "", parameter[4], NULL, NULL) != LDAP_SUCCESS ) {
-        ret->error = PAM_AUTH_ERR;
-        goto cleanup_ldap;
-    }*/
-    if (ldap_sasl_bind_s(ld_h, NULL, "", NULL, NULL, NULL, NULL) != LDAP_SUCCESS ) {
+    if ((err=ldap_initialize(&ld_h, parameters[0])) != LDAP_SUCCESS){
         ret->state = PAM_AUTH_ERR;
         goto cleanup_ldap;
     }
-    printf("success binding\n");
 
-    if (ldap_search_ext_s(ld_h, parameters[1], LDAP_SCOPE_ONELEVEL, filter, (char**)ldap_attrs, 0, NULL, NULL, NULL, 1, &msg)!= LDAP_SUCCESS) {
+    if ((err=ldap_set_option(ld_h, LDAP_OPT_PROTOCOL_VERSION, &ldap_version)) != LDAP_OPT_SUCCESS){
+        ret->state = PAM_AUTH_ERR;
+        goto cleanup_ldap;
+    }
+    if(parameters[4]){
+        // TODO: rewrite parameters[4]: ,->spaces, use ldap_sasl_interactive_bind_s
+        // TODO: last parameter should contain auth information
+
+        if ((err=ldap_sasl_bind_s(ld_h, NULL, parameters[4], NULL, NULL, NULL, NULL)) != LDAP_SUCCESS ) {
+            ret->state = PAM_AUTH_ERR;
+            goto cleanup_ldap;
+        }
+        needs_unbind=1;
+    }
+
+    if ((err=ldap_search_ext_s(ld_h, parameters[1], LDAP_SCOPE_ONELEVEL, filter, ldap_attr, 0, NULL, NULL, NULL, 1, &msg)) != LDAP_SUCCESS) {
+        ret->state = PAM_AUTH_ERR;
         goto cleanup_ldap;
     }
 
-    printf("success search\n");
     entry = ldap_first_entry(ld_h, msg);
-    printf("entry\n");
-    first_attribute = ldap_first_attribute(ld_h, msg, &ber);
-    printf("message\n");
-    while (!ret->email)
-        ret->email=strdup(first_attribute);
+    if (entry){
+        // there is only one attribute
+        email_values = ldap_get_values_len(ld_h, entry, parameters[2]);
+        // ensure there is only one value
+        if(ldap_count_values_len(email_values)==1){
+            while (!ret->email)
+                ret->email=strdup(email_values[0]->bv_val);
+        }
+        ldap_value_free_len(email_values);
+    }
     ldap_msgfree(msg);
 
 cleanup_ldap:
-    ldap_unbind_ext_s(ld_h, NULL, NULL);
-cleanup_ldap_skip_unbind:
-    if(ld_h)
+    if(err!=LDAP_SUCCESS && err!=LDAP_OPT_SUCCESS)
+        fprintf(stderr, "ldap error: %s\n", ldap_err2string(err));
+    if(needs_unbind){
+        ldap_unbind_ext_s(ld_h, NULL, NULL);
+    }
+    if(ld_h){
         ldap_destroy(ld_h);
+    }
     if(filter)
         free(filter);
-    for (int c=0; c<5;c++){
+    for (int c=0; c<amount_parameters;c++){
         if (parameters[c]){
             free(parameters[c]);
         }
