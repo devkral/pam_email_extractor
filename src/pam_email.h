@@ -5,8 +5,10 @@
 #define PAM_SM_SESSION 1
 #include <security/pam_modules.h>
 
+#ifndef NO_PAM_EMAIL_ALLOC_ERROR_MAX
 #ifndef PAM_EMAIL_ALLOC_ERROR_MAX
 #define PAM_EMAIL_ALLOC_ERROR_MAX 3000
+#endif
 #endif
 
 #ifndef PAM_EMAIL_VAR
