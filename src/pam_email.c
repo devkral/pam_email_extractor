@@ -43,6 +43,8 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
                         parameters[3] = strdup("(uid=?)");
                     break;
                 case 2:
+                    while(!parameters[2])
+                        parameters[2] = strdup(last);
                     while(!parameters[3])
                         parameters[3] = strdup("(uid=?)");
                     break;
