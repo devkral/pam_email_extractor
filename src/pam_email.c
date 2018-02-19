@@ -216,23 +216,38 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
 
 
 void extract_default(struct pam_email_ret_t *ret, const char *username, const char *param){
+    size_t len_username = strlen(username);
     if (param){
-        // handle out of memory gracefully, elsewise login or whatever fails
-        while (!ret->email){
-            ret->email = (char *)calloc(strlen(username)+strlen(param)+1, sizeof(char));
+        // handle out of memory errors.Try multiple times until giving up
+        for (size_t errcount=0; !ret->email; errcount++){
+            ret->email = (char *)calloc(len_username+strlen(param)+2, sizeof(char));
+#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
+            if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
+                ret->state=PAM_BUF_ERR;
+                return;
+            }
+#endif
         }
-        strncpy(ret->email, username, strlen(username)+1);
+        strncpy(ret->email, username, len_username+1);
+        ret->email[len_username]='@';
         strncat(ret->email, param, strlen(param));
     } else {
         char hostname[256];
         if(!gethostname(hostname, 255))
             return;
         hostname[255] = '\0';
-        // handle out of memory gracefully, elsewise login or whatever fails
-        while (!ret->email){
-            ret->email = (char *)calloc(strlen(username)+strlen(hostname)+1, sizeof(char));
+        // handle out of memory errors.Try multiple times until giving up
+        for (size_t errcount=0; !ret->email; errcount++){
+            ret->email = (char *)calloc(len_username+strlen(hostname)+2, sizeof(char));
+#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
+            if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
+                ret->state=PAM_BUF_ERR;
+                return;
+            }
+#endif
         }
-        strncpy(ret->email, username, strlen(username)+1);
+        strncpy(ret->email, username, len_username+1);
+        ret->email[len_username]='@';
         strncat(ret->email, hostname, strlen(hostname));
     }
 }
