@@ -30,6 +30,7 @@ int main(int argc, char *argv[]){
     return 1;
   }
   printf("Result:\n Email: %s\n Status returned: %i\n", test_ret.email, test_ret.state);
-  free(test_ret.email);
+  if(test_ret.email)
+    free(test_ret.email);
   return 0;
 }

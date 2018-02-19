@@ -131,36 +131,39 @@ cleanup_ldap_skip_unbind:
 #endif
 
 void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char *param){
-    char *gecos=0, *emailfield=0;
+    char *gecos_full=0, *emailfield=0;
     size_t email_length=0;
     struct passwd *pws = getpwnam (username);
     if (pws){
-        while(!gecos)
-            gecos = strdup(pws->pw_gecos);
-        emailfield = gecos;
+        while(!gecos_full)
+            gecos_full = strdup(pws->pw_gecos);
         endpwent();
-        free(pws);
     }
     else {
         return;
     }
+
     // find email field
+    emailfield = gecos_full;
     for(int c=0; c<3; c++){
         emailfield=strchr(emailfield, ',');
         if(!emailfield){
-            free(gecos);
+            free(gecos_full);
             return;
         }
+        // next char after ,
+        emailfield+=1;
     }
     // check if it is an email
     if(strchr(emailfield, '@')){
         while(isspace(emailfield[0]) && emailfield[0]!='\0')
             emailfield++;
-        while(!isspace(emailfield[email_length]) && emailfield[0]!='\0')
+        while(!isspace(emailfield[email_length]) && emailfield[email_length]!='\0')
             email_length++;
-        ret->email = strndup(emailfield, email_length);
+        while(!ret->email)
+            ret->email = strndup(emailfield, email_length);
     }
-    free(gecos);
+    free(gecos_full);
 }
 
 void extract_git(struct pam_email_ret_t *ret, const char *username, const char *param){
@@ -204,7 +207,8 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
                 continue;
             while(!isspace(email_begin[email_length]) && email_begin[email_length]!='\0')
                 email_length++;
-            ret->email = strndup(email_begin, email_length);
+            while(!ret->email)
+                ret->email = strndup(email_begin, email_length);
             free(line);
             break;
         }
