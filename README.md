@@ -1,9 +1,11 @@
 # Setup
 
+```sh
 cd ./build
 cmake ..
 make
 cp ./src/pam_email_extractor.so <dir for pam modules>
+```
 
 in pam service file add:
 auth optional pam_email_extractor.so <configuration>
