@@ -35,8 +35,8 @@ items are position dependent and are seperated by whitespaces
 possible items:
 * gecos= : extract email from the gecos field of the user
 * git= : extract email from user .gitconfig
-* ldap=&lt;url;dn;emailattribute;filter&rt; : extract email from ldap.
-* default=&lt;default email domain&rt; : default email domain to add to username; e.g. default=example.org and username is tom => tom@example.org.
+* ldap=&lt;url;dn;emailattribute;filter&gt; : extract email from ldap.
+* default=&lt;default email domain&gt; : default email domain to add to username; e.g. default=example.org and username is tom => tom@example.org.
 
 pam_email_extractor uses following aruments if no arguments were given:
 gecos= git= default=localhost
