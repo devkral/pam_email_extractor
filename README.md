@@ -1,4 +1,5 @@
 #Setup
+
 cd ./build
 cmake ..
 make
@@ -11,6 +12,7 @@ session optional pam_email_extractor.so <configuration>
 (only of them is needed elsewise there could be duplicate ldap requests)
 
 #Usage
+
 In some program (here rpam2, ruby) retrieve the "email" pam environment variable:
 
 ```ruby
@@ -23,9 +25,11 @@ Rpam2.listenv('<servicefile>', '<username>', '<password>')
 ```
 
 #Naming
+
 pam_email as well as pam_mail already existed so I had to rename to pam_email_extractor.
 
 #Configuration
+
 items are position dependent and are seperated by whitespaces
 
 possible items:
@@ -38,6 +42,7 @@ pam_email_extractor uses following aruments if no arguments were given:
 gecos= git= default=localhost
 
 ## ldap
+
 LDAP is always available except if compiled with the NO_LDAP flag
 ldap takes following ; seperated arguments:
 * url: url to query, needs scheme e.g. ldaps://
@@ -45,8 +50,7 @@ ldap takes following ; seperated arguments:
 * emailattribute (default: "email"): name of emailattribute of user object
 * filter (default: "(uid=?)"): filter query, ? is replaced by username in filter query
 
-
-
 ## default
+
 Because in default the username is taken in whole I limit the amount of retries when allocating.
 It should be used as a fallback and returns if not out of memory always an emailaddress. So it is wise to position it last.
