@@ -1,4 +1,4 @@
-#include "pam_email.h"
+#include "pam_email_extractor.h"
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>

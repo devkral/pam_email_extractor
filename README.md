@@ -3,15 +3,15 @@
 cd ./build
 cmake ..
 make
-cp ./src/pam_email.so <dir for pam modules>
+cp ./src/pam_email_extractor.so <dir for pam modules>
 
 in pam service file add:
-auth optional pam_email.so <configuration>
+auth optional pam_email_extractor.so <configuration>
 or
-session optional pam_email.so <configuration>
+session optional pam_email_extractor.so <configuration>
 
 #Naming
-please don't confuse it with pam_mail.
+pam_email as well as pam_mail already existed.
 
 #Configuration
 items are position dependent and are seperated by whitespaces

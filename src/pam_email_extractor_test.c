@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "pam_email.h"
+#include "pam_email_extractor.h"
 
 
 int main(int argc, char *argv[]){
