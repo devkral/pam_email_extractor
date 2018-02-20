@@ -1,4 +1,4 @@
-#Setup
+# Setup
 
 cd ./build
 cmake ..
@@ -11,7 +11,7 @@ or
 session optional pam_email_extractor.so <configuration>
 (only of them is needed elsewise there could be duplicate ldap requests)
 
-#Usage
+# Usage
 
 In some program (here rpam2, ruby) retrieve the "email" pam environment variable:
 
@@ -24,11 +24,11 @@ Rpam2.getenv('<servicefile>', '<username>', '<password>', 'email')
 Rpam2.listenv('<servicefile>', '<username>', '<password>')
 ```
 
-#Naming
+# Naming
 
 pam_email as well as pam_mail already existed so I had to rename to pam_email_extractor.
 
-#Configuration
+# Configuration
 
 items are position dependent and are seperated by whitespaces
 
