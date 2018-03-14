@@ -8,11 +8,40 @@
 
 #ifndef NO_LDAP
 #include <ldap.h>
+//#include <sasl.h>
 
+int pam_sasl_interact(LDAP *ld, unsigned flags, void *defaults, void *in)
+{
+    /**
+    char *saslconfigstr=(char*)defaults;
+
+    sasl_interact_t *interact = (sasl_interact_t*)in;
+    if( ld == NULL )
+        return LDAP_PARAM_ERROR;
+
+    while( interact->id != SASL_CB_LIST_END ) {
+
+        // default result
+        char *dflt = (char*)interact->defresult;
+
+        // TODO: extract from string elements, needs helper
+        // see https://docs.oracle.com/cd/E86824_01/html/E54774/ldap-sasl-interactive-bind-s-3ldap.html for documentation
+        // https://github.com/goeb/reference/blob/master/C/ldap_sasl_interactive_bind_s.c
+        //dflt=NULL;
+        // check if dflt is zero or ""
+        interact->result = (dflt && *dflt) ? dflt : (char*)"";
+        interact->len = strlen( (char*)interact->result );
+        interact++;
+    }*/
+    return LDAP_SUCCESS;
+}
+
+
+//FIXME:  (sasl auth method) doesn't work
 // uri, base, (ldap attr, (filter, (sasl auth method)))
 void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char *param){
-    char* parameters[5]={0,0,0,0,0};
-    const int amount_parameters=5;
+    char* parameters[6]={0,0,0,0,0,0};
+    const int amount_parameters=6;
     unsigned char needs_unbind=0;
     const char *sep, *last;
     int err;
@@ -21,6 +50,7 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
     size_t count_replacements=0;
     const size_t len_username = strlen(username);
     unsigned int ldap_version = LDAP_VERSION3;
+    unsigned int sasl_flags = LDAP_SASL_QUIET;
     BerValue ** email_values;
     LDAP *ld_h=0;
     LDAPMessage *msg=0, *entry=0;
@@ -52,8 +82,12 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
                     while(!parameters[3])
                         parameters[3] = strdup("(uid=?)");
                     break;
-                case 3:
                 case 4:
+                    // initialize sasl configstring with ""
+                    while(!parameters[5])
+                        parameters[5] = strdup("");
+                case 3:
+                case 5:
                     while(!parameters[c])
                         parameters[c] = strdup(last);
                     break;
@@ -104,10 +138,14 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
         goto cleanup_ldap;
     }
     if(parameters[4]){
+        char *replace_space;
+        while ((replace_space=strchr(parameters[4], ','))) {
+            replace_space[0] = ' ';
+        }
         // TODO: rewrite parameters[4]: ,->spaces, use ldap_sasl_interactive_bind_s
         // TODO: last parameter should contain auth information
 
-        if ((err=ldap_sasl_bind_s(ld_h, NULL, parameters[4], NULL, NULL, NULL, NULL)) != LDAP_SUCCESS ) {
+        if ((err=ldap_sasl_interactive_bind_s(ld_h, NULL, parameters[4], NULL, NULL, sasl_flags, pam_sasl_interact, &parameters[5])) != LDAP_SUCCESS ) {
             ret->state = PAM_AUTH_ERR;
             goto cleanup_ldap;
         }
@@ -430,6 +468,7 @@ pam_handle_t *pamh, const int argc, const char **argv){
         memmove(emailtemp+strlen(PAM_EMAIL), emailtemp, lenemail+1);
         memmove(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL));
         pam_putenv(pamh, emailtemp);
+        // uses copy so free here
         free(emailtemp);
     }
     return email_ret.state;
