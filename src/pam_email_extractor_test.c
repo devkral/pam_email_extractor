@@ -7,35 +7,13 @@
 
 int main(int argc, char *argv[]){
     const char *param=0;
-    struct pam_email_ret_t test_ret = {0,0};
+    struct pam_email_ret_t test_ret;
     if (argc<2){
         fprintf(stderr, "Usage: %s <username> <email extractor=param...>\n", argv[0]);
         fprintf(stderr, " Extractors: ldap, gecos, file, git, default\n");
         return 1;
     }
-    if (argc>=4){
-        param=argv[3];
-    }
-    
-    if (strcmp(argv[2], "ldap")==0){
-#ifndef NO_LDAP
-        extract_ldap(&test_ret, argv[1], argv[3]);
-#else
-        fprintf(stderr, "Build without ldap support\n");
-        return 1;
-#endif
-    } else if (strcmp(argv[2], "gecos")==0){
-        extract_gecos(&test_ret, argv[1], param);
-    } else if (strcmp(argv[2], "file")==0){
-        extract_file(&test_ret, argv[1], param);
-    } else if (strcmp(argv[2], "git")==0){
-        extract_git(&test_ret, argv[1], param);
-    } else if (strcmp(argv[2], "default")==0){
-        extract_default(&test_ret, argv[1], param);
-    } else {
-        fprintf(stderr, "Extractor not found\n");
-        return 1;
-    }
+    extract_email(&test_ret, argv[1], argc-2, (const char**) &argv[2]);
     printf("Result:\n Email: %s\n Status returned: %i\n", test_ret.email, test_ret.state);
     if(test_ret.email)
         free(test_ret.email);
