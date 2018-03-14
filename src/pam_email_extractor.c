@@ -337,10 +337,9 @@ void extract_default(struct pam_email_ret_t *ret, const char *username, const ch
 // module name is NOT included in argv
 void extract_email(struct pam_email_ret_t *email_ret,
 const char *username, int argc, const char **argv){
-    char use_all = 0;
     size_t extractor_name_length=0;
     const char *param=0;
-    char *extractor=0;
+    const char *extractor=0;
     int shall_free=0;
 
     email_ret->email = 0;
@@ -352,28 +351,11 @@ const char *username, int argc, const char **argv){
     }
 
     for (int countarg=0; countarg < argc; countarg++){
-        param = strchr(argv[countarg], '=');
+        extractor = argv[countarg];
+        param = strchr(extractor, '=');
         if (param){
-            extractor_name_length = param-argv[countarg];
-            // extractor name = ""
-            if (extractor_name_length == 0){
-                email_ret->state = PAM_AUTH_ERR;
-                goto error_extract_email;
-            }
-            // handle out of memory gracefully, elsewise login or whatever fails
-            for (size_t errcount=0; !extractor; errcount++){
-                // length +1 for \0
-                extractor = (char*)calloc(extractor_name_length+1, sizeof(char));
-#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
-                if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
-                    email_ret->state=PAM_BUF_ERR;
-                    goto error_extract_email;
-                }
-#endif
-            }
-            shall_free = 1;
-            // copy without =, \0 is set by calloc
-            strncpy(extractor, argv[countarg], param-argv[countarg]);
+            // param is extractor+1 = length
+            extractor_name_length = param-extractor;
             // remove =
             param = param+1;
             // set to zero if not specified
@@ -381,56 +363,43 @@ const char *username, int argc, const char **argv){
                 param = 0;
             }
         } else {
-            // extractor is not freed in this case, so remove const
-            extractor = (char *)argv[countarg];
-            shall_free = 0;
+            extractor = argv[countarg];
+            extractor_name_length = strlen(extractor);
         }
 
 #ifndef NO_LDAP
-        // without config not usable => no use_all auto activation
-        if (strcmp(extractor, "ldap")==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
+        // without config not usable
+        if (strncmp(extractor, "ldap", extractor_name_length)==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
             extract_ldap(email_ret, username, param);
         }
 #else
-        if (strcmp(extractor, "ldap")==0){
+        if (strncmp(extractor, "ldap", extractor_name_length)==0){
             fprintf(stderr, "LDAP is not available");
         }
 #endif
-        if (strcmp(extractor, "gecos")==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
+        if (strncmp(extractor, "gecos", extractor_name_length)==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
             extract_gecos(email_ret, username, param);
         }
-        if (strcmp(extractor, "file")==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
+        if (strncmp(extractor, "file", extractor_name_length)==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
             extract_file(email_ret, username, param);
         }
-        if (strcmp(extractor, "git")==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
+        if (strncmp(extractor, "git", extractor_name_length)==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
             extract_git(email_ret, username, param);
         }
         // last extractor, fallback
-        if (strcmp(extractor, "default")==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
+        if (strncmp(extractor, "default", extractor_name_length)==0 && (email_ret->email == 0 && email_ret->state == PAM_SUCCESS)){
             extract_default(email_ret, username, param);
         }
 
-        // cleanup if calloc was used
-        if (shall_free){
-            free(extractor);
-        }
-        // param must be 0 elsewise extractor is incorrectly freed when not copied
-        param = 0;
-        extractor = 0;
-        use_all = 0;
         if (email_ret->state != PAM_SUCCESS)
             goto error_extract_email;
     }
-
     // don't cleanup if success
     return;
 error_extract_email:
     if (email_ret->email){
         free(email_ret->email);
         email_ret->email=0;
-    }
-    if (shall_free){
-        free(extractor);
     }
     email_ret->email=0;
 }
@@ -449,17 +418,19 @@ pam_handle_t *pamh, const int argc, const char **argv){
         char *emailtemp = 0;
         // handle out of memory errors.Try multiple times until giving up
         for (size_t errcount=0; !emailtemp; errcount++){
-            emailtemp = (char*)calloc(strlen(PAM_EMAIL)+lenemail+1, sizeof(char));
+            emailtemp = (char*)realloc(email_ret.email, (strlen(PAM_EMAIL)+lenemail+1)*sizeof(char));
 #ifdef PAM_EMAIL_ALLOC_ERROR_MAX
             if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
+                free(email_ret.email);
                 return PAM_BUF_ERR;
             }
 #endif
         }
-        strncpy(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL)+1);
-        strncat(emailtemp, email_ret.email, lenemail);
+        // copy \0 terminator
+        memmove(emailtemp+strlen(PAM_EMAIL), emailtemp, lenemail+1);
+        memmove(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL));
         pam_putenv(pamh, emailtemp);
-        free(email_ret.email);
+        free(emailtemp);
     }
     return email_ret.state;
 }
