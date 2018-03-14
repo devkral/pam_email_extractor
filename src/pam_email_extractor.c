@@ -139,10 +139,10 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
     }
     if(parameters[4]){
         char *replace_space;
+        // rewrite , to spaces because spaces are not possible to input
         while ((replace_space=strchr(parameters[4], ','))) {
             replace_space[0] = ' ';
         }
-        // TODO: rewrite parameters[4]: ,->spaces, use ldap_sasl_interactive_bind_s
         // TODO: last parameter should contain auth information
 
         if ((err=ldap_sasl_interactive_bind_s(ld_h, NULL, parameters[4], NULL, NULL, sasl_flags, pam_sasl_interact, &parameters[5])) != LDAP_SUCCESS ) {
