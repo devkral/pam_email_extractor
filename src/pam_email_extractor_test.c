@@ -21,6 +21,8 @@ int main(int argc, char *argv[]){
 #endif
   } else if (strcmp(argv[2], "gecos")==0){
     extract_gecos(&test_ret, argv[1], argv[3]);
+} else if (strcmp(argv[2], "file")==0){
+    extract_file(&test_ret, argv[1], argv[3]);
   } else if (strcmp(argv[2], "git")==0){
     extract_git(&test_ret, argv[1], argv[3]);
   } else if (strcmp(argv[2], "default")==0){

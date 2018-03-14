@@ -183,6 +183,59 @@ void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char
     free(gecos_full);
 }
 
+void extract_file(struct pam_email_ret_t *ret, const char *username, char *param){
+    char *fname=0, *home_name=0;
+    char *line=NULL;
+    char* email_begin=0;
+    size_t file_name_length=0, email_length=0, home_length=0;
+    struct passwd *pws = getpwnam (username);
+    if (pws){
+        home_length = strlen(pws->pw_dir);
+        while(!home_name)
+            home_name = strdup(pws->pw_dir);
+        endpwent();
+    }
+    else {
+        return;
+    }
+    if (!param){
+        param = ".email";
+    }
+    file_name_length = strlen(param);
+    // should not fail because of oom, 12 because of / and \0
+    while (!fname){
+        fname = calloc(home_length+file_name_length+1, sizeof(char));
+    }
+    strncpy(fname, home_name, home_length+1);
+    // not needed anymore
+    free(home_name);
+    strncat(fname, param, file_name_length);
+    FILE *emailfile = fopen(fname, "r");
+    // not needed anymore
+    free(fname);
+    if (!emailfile)
+        return;
+    while(!feof(emailfile)){
+        getline(&line, &line_length, emailfile);
+        if(strchr(line, '@')){
+            email_begin = line;
+            while(isspace(email_begin[0]) && email_begin[0]!='\0')
+                email_begin++;
+            if (email_begin[0]=='\0')
+                continue;
+            while(!isspace(email_begin[email_length]) && email_begin[email_length]!='\0')
+                email_length++;
+            while(!ret->email)
+                ret->email = strndup(email_begin, email_length);
+            free(line);
+            break;
+        }
+        free(line);
+        line = NULL;
+    }
+    fclose(emailfile);
+}
+
 void extract_git(struct pam_email_ret_t *ret, const char *username, const char *param){
     char *fname=0, *home_name=0;
     char *line=NULL;
@@ -215,9 +268,11 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
     while(!feof(gitfile)){
         getline(&line, &line_length, gitfile);
         if(strstr(line, "email")){
-            email_begin = strchr(line, '=')+1;
+            email_begin = strchr(line, '=');
             if (!email_begin)
                 continue;
+            // set here +1
+            email_begin+=1;
             while(isspace(email_begin[0]) && email_begin[0]!='\0')
                 email_begin++;
             if (email_begin[0]=='\0')
@@ -340,10 +395,12 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
         if (strcmp(extractor, "gecos")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
             extract_gecos(&email_ret, username, param);
         }
+        if (strcmp(extractor, "file")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
+            extract_file(&email_ret, username, param);
+        }
         if (strcmp(extractor, "git")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
             extract_git(&email_ret, username, param);
         }
-
 
         // last extractor, failback
         if (strcmp(extractor, "default")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
