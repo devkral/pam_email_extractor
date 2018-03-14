@@ -17,7 +17,7 @@
 
 // 1. argument is not library path
 const int default_argc = 4;
-const char* default_argv[] = {"file=", "gecos=", "git=", "default=localhost"};
+const char* default_argv[] = {"file=", "gecos=", "git=", "default="};
 
 const char *PAM_EMAIL = PAM_EMAIL_VAR;
 
@@ -37,13 +37,6 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh, int flags,
                                     int argc, const char **argv);
 
 #ifdef PAM_EMAIL_DEBUG
-#ifndef NO_LDAP
-void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char *param);
-#endif
-void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char *param);
-void extract_file(struct pam_email_ret_t *ret, const char *username, const char *param);
-void extract_git(struct pam_email_ret_t *ret, const char *username, const char *param);
-void extract_default(struct pam_email_ret_t *ret, const char *username, const char *param);
-#endif
+struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **argv);
 
 #endif

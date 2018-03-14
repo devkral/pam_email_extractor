@@ -39,10 +39,10 @@ possible items:
 * git= : extract email from user .gitconfig
 * file=[.email] : extract email from user .email (or other file)
 * ldap=&lt;url;dn;emailattribute;filter&gt; : extract email from ldap.
-* default=&lt;default email domain&gt; : default email domain to add to username; e.g. default=example.org and username is tom => tom@example.org.
+* default=[email-domain] : default email domain to add to username; e.g. default=example.org and username is tom => tom@example.org. Defaults to hostname
 
 pam_email_extractor uses following aruments if no arguments were given:
-gecos= git= default=localhost
+file= gecos= git= default=
 
 ## ldap
 
@@ -57,3 +57,4 @@ ldap takes following ; seperated arguments:
 
 Because in default the username is taken in whole I limit the amount of retries when allocating.
 It should be used as a fallback and returns if not out of memory always an emailaddress. So it is wise to position it last.
+If no hostname is given it uses system gethostname.

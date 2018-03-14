@@ -24,6 +24,10 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
     BerValue ** email_values;
     LDAP *ld_h=0;
     LDAPMessage *msg=0, *entry=0;
+    if (!param){
+        fprintf(stderr, "LDAP needs configuration");
+        return;
+    }
     last=param;
     for(int c=0; c<amount_parameters; c++){
         if (last)
@@ -183,11 +187,11 @@ void extract_gecos(struct pam_email_ret_t *ret, const char *username, const char
     free(gecos_full);
 }
 
-void extract_file(struct pam_email_ret_t *ret, const char *username, char *param){
+void extract_file(struct pam_email_ret_t *ret, const char *username, const char *param){
     char *fname=0, *home_name=0;
     char *line=NULL;
     char* email_begin=0;
-    size_t file_name_length=0, email_length=0, home_length=0;
+    size_t file_name_length=0, email_length=0, home_length=0, line_length=0;
     struct passwd *pws = getpwnam (username);
     if (pws){
         home_length = strlen(pws->pw_dir);
@@ -334,6 +338,7 @@ void extract_default(struct pam_email_ret_t *ret, const char *username, const ch
 struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **argv){
     char use_all = 0;
     struct pam_email_ret_t email_ret;
+    size_t extractor_name_length=0;
     const char *param=0;
     char *extractor=0;
     const char *username;
@@ -353,14 +358,16 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
     for (int countarg=0; countarg < argc; countarg++){
         param = strchr(argv[countarg], '=');
         if (param){
-            if (param-argv[countarg] == 0){
+            extractor_name_length = param-argv[countarg];
+            // extractor name = ""
+            if (extractor_name_length == 0){
                 email_ret.state = PAM_AUTH_ERR;
                 goto error_extract_email;
             }
             // handle out of memory gracefully, elsewise login or whatever fails
             for (size_t errcount=0; !extractor; errcount++){
                 // length +1 for \0
-                extractor = (char*)calloc(param-argv[countarg]+1, sizeof(char));
+                extractor = (char*)calloc(extractor_name_length+1, sizeof(char));
 #ifdef PAM_EMAIL_ALLOC_ERROR_MAX
                 if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
                     email_ret.state=PAM_BUF_ERR;
@@ -372,7 +379,10 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
             strncpy(extractor, argv[countarg], param-argv[countarg]);
             // remove =
             param = param+1;
-            // if strlea
+            // set to zero if not specified
+            if (param[0]=='\0'){
+                param = 0;
+            }
         } else {
             // extractor is not freed in this case, so remove const
             extractor = (char *)argv[countarg];
@@ -381,11 +391,7 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
 #ifndef NO_LDAP
         // without config not usable => no use_all auto activation
         if (strcmp(extractor, "ldap")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
-            if (param)
-                extract_ldap(&email_ret, username, param);
-            else {
-                fprintf(stderr, "LDAP needs configuration");
-            }
+            extract_ldap(&email_ret, username, param);
         }
 #else
         if (strcmp(extractor, "ldap")==0){
@@ -402,7 +408,7 @@ struct pam_email_ret_t extract_email(pam_handle_t *pamh, int argc, const char **
             extract_git(&email_ret, username, param);
         }
 
-        // last extractor, failback
+        // last extractor, fallback
         if (strcmp(extractor, "default")==0 && (email_ret.email == 0 && email_ret.state == PAM_SUCCESS)){
             extract_default(&email_ret, username, param);
         }
