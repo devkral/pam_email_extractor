@@ -345,7 +345,8 @@ void extract_default(struct pam_email_ret_t *ret, const char *username, const ch
     size_t len_username, len_param;
     char hostname[256];
     if (!param){
-        if(!gethostname(hostname, 255)){
+        // 0 on success
+        if(gethostname(hostname, 255)){
             return;
         }
         hostname[255] = '\0';
