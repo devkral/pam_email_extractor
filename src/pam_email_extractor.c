@@ -138,6 +138,7 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
         goto cleanup_ldap;
     }
     if(parameters[4]){
+        fprintf(stderr, "the saslbinding feature is experimental, you have been warned.\nBut don't hesitate to create PRs and bugreports.\n");
         char *replace_space;
         // rewrite , to spaces because spaces are not possible to input
         while ((replace_space=strchr(parameters[4], ','))) {
