@@ -248,9 +248,11 @@ void extract_file(struct pam_email_ret_t *ret, const char *username, const char 
     while (!fname){
         fname = calloc(home_length+sub_path_length+1, sizeof(char));
     }
-    strncpy(fname, home_name, home_length+1);
+    // not +1 because of calloc
+    strncpy(fname, home_name, home_length);
     // not needed anymore
     free(home_name);
+    // not +1 because of calloc
     strncat(fname, param, sub_path_length);
     FILE *emailfile = fopen(fname, "r");
     // not needed anymore
@@ -259,12 +261,12 @@ void extract_file(struct pam_email_ret_t *ret, const char *username, const char 
         return;
     while(!feof(emailfile)){
         getline(&line, &line_length, emailfile);
-        if(strchr(line, '@')){
-            email_begin = line;
-            while(isspace(email_begin[0]) && email_begin[0]!='\0')
-                email_begin++;
-            if (email_begin[0]=='\0')
-                continue;
+        if(line && (email_begin=strchr(line, '@'))){
+            // stop if next char is space or if line begin
+            while(!isspace(email_begin[-1]) && email_begin!=line){
+                email_begin--;
+                email_length++;
+            }
             while(!isspace(email_begin[email_length]) && email_begin[email_length]!='\0')
                 email_length++;
             while(!ret->email)
@@ -302,10 +304,12 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
     while (!fname){
         fname = calloc(home_length+sub_path_length+1, sizeof(char));
     }
-    strncpy(fname, home_name, home_length+1);
+    // not +1 because of calloc
+    strncpy(fname, home_name, home_length);
     // not needed anymore
     free(home_name);
-    strncat(fname, param, sub_path_length+1);
+    // not +1 because of calloc
+    strncat(fname, param, sub_path_length);
     FILE *gitfile = fopen(fname, "r");
     // not needed anymore
     free(fname);
@@ -313,7 +317,7 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
         return;
     while(!feof(gitfile)){
         getline(&line, &line_length, gitfile);
-        if(strstr(line, "email")){
+        if(line && strstr(line, "email")){
             email_begin = strchr(line, '=');
             if (!email_begin)
                 continue;
