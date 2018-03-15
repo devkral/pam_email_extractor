@@ -120,7 +120,7 @@ void extract_ldap(struct pam_email_ret_t *ret, const char *username, const char 
     while(tmp_filter_next)
     {
         strncat(filter, tmp_filter, tmp_filter_next-tmp_filter);
-        strncat(filter, username, strlen(username));
+        strncat(filter, username, len_username);
         tmp_filter = tmp_filter_next+1;
         tmp_filter_next = strchr(tmp_filter, '?');
     }
@@ -342,40 +342,33 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
 
 
 void extract_default(struct pam_email_ret_t *ret, const char *username, const char *param){
-    size_t len_username = strlen(username);
-    if (param){
-        // handle out of memory errors.Try multiple times until giving up
-        for (size_t errcount=0; !ret->email; errcount++){
-            ret->email = (char *)calloc(len_username+strlen(param)+2, sizeof(char));
-#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
-            if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
-                ret->state=PAM_BUF_ERR;
-                return;
-            }
-#endif
-        }
-        strncpy(ret->email, username, len_username+1);
-        ret->email[len_username]='@';
-        strncat(ret->email, param, strlen(param));
-    } else {
-        char hostname[256];
-        if(!gethostname(hostname, 255))
+    size_t len_username, len_param;
+    char hostname[256];
+    if (!param){
+        if(!gethostname(hostname, 255)){
             return;
-        hostname[255] = '\0';
-        // handle out of memory errors.Try multiple times until giving up
-        for (size_t errcount=0; !ret->email; errcount++){
-            ret->email = (char *)calloc(len_username+strlen(hostname)+2, sizeof(char));
-#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
-            if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
-                ret->state=PAM_BUF_ERR;
-                return;
-            }
-#endif
         }
-        strncpy(ret->email, username, len_username+1);
-        ret->email[len_username]='@';
-        strncat(ret->email, hostname, strlen(hostname));
+        hostname[255] = '\0';
+        param = hostname;
     }
+    len_username = strlen(username);
+    len_param = strlen(param);
+    // handle out of memory errors.Try multiple times until giving up
+    for (size_t errcount=0; !ret->email; errcount++){
+        ret->email = (char *)malloc((len_username+len_param+2)*sizeof(char));
+#ifdef PAM_EMAIL_ALLOC_ERROR_MAX
+        if (errcount>PAM_EMAIL_ALLOC_ERROR_MAX){
+            ret->state=PAM_BUF_ERR;
+            return;
+        }
+#endif
+    }
+
+    strncpy(ret->email, username, len_username+1);
+    ret->email[len_username]='@';
+    // len_username+1 to get next char
+    // len_param+1 for malloc
+    strncpy(ret->email+len_username+1, param, len_param+1);
 }
 
 
@@ -472,7 +465,7 @@ pam_handle_t *pamh, const int argc, const char **argv){
             }
 #endif
         }
-        // copy \0 terminator
+        // +1 to copy \0 terminator
         memmove(emailtemp+strlen(PAM_EMAIL), emailtemp, lenemail+1);
         memmove(emailtemp, PAM_EMAIL, strlen(PAM_EMAIL));
         pam_putenv(pamh, emailtemp);
