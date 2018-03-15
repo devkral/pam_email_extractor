@@ -252,7 +252,6 @@ void extract_file(struct pam_email_ret_t *ret, const char *username, const char 
     // not needed anymore
     free(home_name);
     strncat(fname, param, sub_path_length);
-    printf("%s\n", fname);
     FILE *emailfile = fopen(fname, "r");
     // not needed anymore
     free(fname);
