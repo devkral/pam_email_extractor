@@ -229,7 +229,7 @@ void extract_file(struct pam_email_ret_t *ret, const char *username, const char 
     char *fname=0, *home_name=0;
     char *line=NULL;
     char* email_begin=0;
-    size_t file_name_length=0, email_length=0, home_length=0, line_length=0;
+    size_t sub_path_length=0, email_length=0, home_length=0, line_length=0;
     struct passwd *pws = getpwnam (username);
     if (pws){
         home_length = strlen(pws->pw_dir);
@@ -241,17 +241,18 @@ void extract_file(struct pam_email_ret_t *ret, const char *username, const char 
         return;
     }
     if (!param){
-        param = ".email";
+        param = "/.email";
     }
-    file_name_length = strlen(param);
-    // should not fail because of oom, 12 because of / and \0
+    sub_path_length = strlen(param);
+    // should not fail because of oom, +1 for \0
     while (!fname){
-        fname = calloc(home_length+file_name_length+1, sizeof(char));
+        fname = calloc(home_length+sub_path_length+1, sizeof(char));
     }
     strncpy(fname, home_name, home_length+1);
     // not needed anymore
     free(home_name);
-    strncat(fname, param, file_name_length);
+    strncat(fname, param, sub_path_length);
+    printf("%s\n", fname);
     FILE *emailfile = fopen(fname, "r");
     // not needed anymore
     free(fname);
@@ -283,7 +284,7 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
     char *line=NULL;
     size_t line_length=0;
     char* email_begin=0;
-    size_t email_length=0, home_length=0;
+    size_t email_length=0, home_length=0, sub_path_length=0;
     struct passwd *pws = getpwnam (username);
     if (pws){
         home_length = strlen(pws->pw_dir);
@@ -294,14 +295,18 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
     else {
         return;
     }
-    // should not fail because of oom, 12 because of / and \0
+    if (!param){
+        param = "/.gitconfig";
+    }
+    sub_path_length = strlen(param);
+    // should not fail because of oom, +1 for \0
     while (!fname){
-        fname = calloc(home_length+12, sizeof(char));
+        fname = calloc(home_length+sub_path_length+1, sizeof(char));
     }
     strncpy(fname, home_name, home_length+1);
     // not needed anymore
     free(home_name);
-    strncat(fname, "/.gitconfig", 11);
+    strncat(fname, param, sub_path_length+1);
     FILE *gitfile = fopen(fname, "r");
     // not needed anymore
     free(fname);

@@ -36,13 +36,13 @@ items are position dependent and are seperated by whitespaces
 
 possible items:
 * gecos= : extract email from the gecos field of the user
-* git= : extract email from user .gitconfig
-* file=[.email] : extract email from user .email (or other file)
+* git=[/.gitignore] : extract email from user .gitconfig (or other file)
+* file=[/.email] : extract email from user .email (or other file)
 * ldap=&lt;url;dn;emailattribute;filter&gt; : extract email from ldap.
-* default=[email-domain] : default email domain to add to username; e.g. default=example.org and username is tom => tom@example.org. Defaults to hostname
+* default=[hostname] : default email domain to add to username; e.g. default=example.org and username is tom => tom@example.org. Defaults to hostname
 
 pam_email_extractor uses following aruments if no arguments were given:
-file= gecos= git= default=
+file gecos git default
 
 ## ldap
 
@@ -52,6 +52,15 @@ ldap takes following ; seperated arguments:
 * dn: domain of user objects
 * emailattribute (default: "email"): name of emailattribute of user object
 * filter (default: "(uid=?)"): filter query, ? is replaced by username in filter query
+
+## git & file
+
+note that given path has to start with /.
+composition is e.g.:
+
+user tom => prefix: /home/tom
+param /.email => combined: /home/tom/.email
+
 
 ## default
 
