@@ -246,14 +246,14 @@ void extract_file(struct pam_email_ret_t *ret, const char *username, const char 
     sub_path_length = strlen(param);
     // should not fail because of oom, +1 for \0
     while (!fname){
-        fname = calloc(home_length+sub_path_length+1, sizeof(char));
+        fname = malloc((home_length+sub_path_length+1)*sizeof(char));
     }
-    // not +1 because of calloc
-    strncpy(fname, home_name, home_length);
+    // +1 because of malloc
+    strncpy(fname, home_name, home_length+1);
     // not needed anymore
     free(home_name);
-    // not +1 because of calloc
-    strncat(fname, param, sub_path_length);
+    // +1 because of malloc
+    strncat(fname, param, sub_path_length+1);
     FILE *emailfile = fopen(fname, "r");
     // not needed anymore
     free(fname);
@@ -302,14 +302,14 @@ void extract_git(struct pam_email_ret_t *ret, const char *username, const char *
     sub_path_length = strlen(param);
     // should not fail because of oom, +1 for \0
     while (!fname){
-        fname = calloc(home_length+sub_path_length+1, sizeof(char));
+        fname = malloc((home_length+sub_path_length+1)*sizeof(char));
     }
-    // not +1 because of calloc
-    strncpy(fname, home_name, home_length);
+    // +1 because of malloc
+    strncpy(fname, home_name, home_length+1);
     // not needed anymore
     free(home_name);
-    // not +1 because of calloc
-    strncat(fname, param, sub_path_length);
+    // +1 because of malloc
+    strncat(fname, param, sub_path_length+1);
     FILE *gitfile = fopen(fname, "r");
     // not needed anymore
     free(fname);
